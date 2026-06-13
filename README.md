@@ -85,11 +85,15 @@ sequenceDiagram
     actor User
     participant Read as Read specialist
     participant Mutate as Mutation specialist
-    participant Gmail as Gmail MCP tools
+    participant ReadTools as Gmail MCP tools (read-only)
+    participant MutTools as Gmail MCP tools (mutation)
 
     User->>Read: "Scan my primary inbox"
-    Read->>Read: search · classify · cache · save session
+    Read->>ReadTools: search · fetch messages
+    ReadTools-->>Read: message refs + content
+    Read->>Read: classify (local LLM) · cache · save session
     Read-->>User: review table (useful / promo / jobs / review)
+    Note over Read,MutTools: Read specialist has NO mutation tools
 
     User->>Mutate: "Trash the promotional ones"
     alt no review context yet
@@ -98,14 +102,14 @@ sequenceDiagram
         Mutate->>Mutate: plan action from reviewed IDs only
         Mutate-->>User: preview + "reply confirm to proceed"
         User->>Mutate: confirm
-        Mutate->>Gmail: execute on confirmed targets
-        Gmail-->>User: result summary
+        Mutate->>MutTools: execute on confirmed targets
+        MutTools-->>User: result summary
     end
 ```
 
 Guarantees enforced in code:
 
-- The **read specialist has no mutation tools** — it physically cannot label, archive, or trash.
+- The **read specialist calls only read-only MCP tools** (`search_gmail`, `search_gmail_date_window`, `get_gmail_message`) — it has no access to the mutation tools and physically cannot label, archive, or trash.
 - The **mutation specialist is blocked** until a review session exists, and only ever targets message IDs that appear in reviewed results.
 - **Nothing destructive runs without an explicit confirmation** following a previewed pending action.
 - **Trash, not delete** — messages are moved to Trash and remain recoverable.
